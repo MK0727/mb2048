@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+    content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>2048 面包版</title>
+  <link rel="stylesheet" type="text/css" href="./css/2048.css"/>
+  <script src="./jqm/jquery-1.11.1.min.js"></script>
+  <script src="./js/support2048.js"></script>
+  <script src="./js/showanimation2048.js"></script>
+  <script src="./js/main2048.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #faf8ef;
+      font-family: Arial, sans-serif;
+      flex-direction: column;
+      align-items: center;
+    }
+    #grid-container {
+      position: relative;
+      width: 320px;
+      height: 320px;
+      margin-top: 20px;
+      background: #bbada0;
+      border-radius: 6px;
+    }
+    .grid-cell {
+      width: 64px;
+      height: 64px;
+      background: rgba(238, 228, 218, 0.35);
+      border-radius: 6px;
+      position: absolute;
+    }
+    .number-cell {
+      position: absolute;
+      border-radius: 6px;
+      text-align: center;
+      font-weight: bold;
+    }
+    #title {
+      margin-top: 30px;
+      font-size: 36px;
+      color: #776e65;
+    }
+    #newgamebutton {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background-color: #f59563;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #scoreText {
+      margin-top: 10px;
+      color: #776e65;
+    }
+    #leaderboard {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 240px;
+      background: #fff3dc;
+      border-radius: 12px;
+      padding: 20px;
+      font-size: 14px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      z-index: 999;
+    }
+    #leaderboard h3 {
+      margin-top: 0;
+      font-size: 18px;
+      text-align: center;
+    }
+    #leaderboard-list {
+      list-style: decimal inside;
+      margin: 0;
+      padding: 0;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #leaderboard-list li {
+      padding: 4px 0;
+      word-break: break-word;
+    }
+    #leaderboard button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 6px;
+      font-size: 13px;
+      border: none;
+      border-radius: 6px;
+      background: #f59563;
+      color: white;
+    }
+    #showLeaderboardBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #8f7a66;
+      color: white;
+      padding: 10px 14px;
+      font-size: 14px;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+    }
+    #name-popup {
+      display: none;
+      position: fixed;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%,-50%);
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="title">2048 面包版</h1>
+  <button id="newgamebutton" onclick="canScroll = false; newgame();">再来</button>
+  <p id="scoreText">你的超话等级是 <span id="position">挑战</span> — 经验值: <span id="score">0</span> 点</p>
+  <div id="grid-container"></div>
+  <button id="showLeaderboardBtn" onclick="toggleLeaderboard()">排行榜</button>
+  <div id="leaderboard">
+  <h3>排行榜</h3>
+      <div id="leaderboard-scroll">
+        <ol id="leaderboard-list"></ol>
+      </div>
+      <button onclick="toggleLeaderboard()">关闭</button>
+    </div>
+
+  <div id="name-popup">
+    <p style="margin-bottom:10px;">游戏结束！请输入你的昵称：</p>
+    <input type="text" id="playerNameInput" placeholder="玩家昵称" style="width:80%;padding:6px;" />
+    <br><br>
+    <button onclick="submitPlayerName()" style="padding:6px 20px;background:#f59563;color:white;border:none;border-radius:6px;">提交</button>
+  </div>
+  <script>
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        document.getElementById("grid-container").innerHTML += '<div class="grid-cell" id="grid-cell-' + i + '-' + j + '"></div>';
+      }
+    }
+
+    function gameOver() {
+      if (gameOverTriggered) return;
+      gameOverTriggered = true;
+      isGameOverFlag = true;
+      setTimeout(() => {
+        document.getElementById('name-popup').style.display = 'block';
+      }, 300);
+    }
+
+    function submitPlayerName1() {
+      const name = document.getElementById("playerNameInput").value || "玩家";
+      saveToLeaderboard(name, score);
+      document.getElementById('name-popup').style.display = 'none';
+    }
+
+    function saveToLeaderboard1(name, score) {
+      $.post("http://123.207.78.205/html2048-master/leaderboard.php?action=add", {
+        name: name,
+        score: score
+      }, function(res) {
+        console.log("排行榜提交成功：", res);
+      });
+    }
+
+    function renderLeaderboard() {
+      $.get("http://123.207.78.205/html2048-master/leaderboard.php?action=get", function(data) {
+        try {
+          const parsed = typeof data === "string" ? JSON.parse(data) : data;
+          const list = document.getElementById("leaderboard-list");
+          list.innerHTML = "";
+    
+          if (parsed.length === 0) {
+            const li = document.createElement("li");
+            li.textContent = "暂无记录";
+            list.appendChild(li);
+          } else {
+            parsed.forEach(entry => {
+              const li = document.createElement("li");
+              li.textContent = `${entry.name} - ${entry.score}分`;
+              list.appendChild(li);
+            });
+          }
+    
+        } catch (e) {
+          alert("排行榜加载失败：" + e);
+        }
+      });
+    }
+
+
+    function toggleLeaderboard() {
+      const lb = document.getElementById('leaderboard');
+      if (lb.style.display === 'none') {
+        renderLeaderboard();
+        lb.style.display = 'block';
+      } else {
+        lb.style.display = 'none';
+      }
+    }
+    window.onload = function() {
+  canScroll = false;
+  newgame();
+}
+
+  </script>
+</body>
+</html>
