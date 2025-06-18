@@ -36,6 +36,8 @@
       background: rgba(238, 228, 218, 0.35);
       border-radius: 6px;
       position: absolute;
+      border: 2px solid #bbada0; /* 增加边框宽度，使网格线更明显 */
+      box-sizing: border-box; /* 确保边框不影响单元格尺寸 */
     }
     .number-cell {
       position: absolute;
@@ -78,7 +80,7 @@
       pointer-events: none; /* 禁用鼠标事件 */
       transition: opacity 0.3s ease; /* 添加过渡效果 */
     }
-    #leaderboard.show {
+    #leaderboard.active {
       opacity: 1;
       pointer-events: auto; /* 启用鼠标事件 */
     }
@@ -159,13 +161,12 @@
     <button onclick="toggleLeaderboard()">关闭</button>
   </div>
 
-  <div id="name-popup">
+ <div id="name-popup">
     <p style="margin-bottom:10px;">游戏结束！请输入你的昵称：</p>
     <input type="text" id="playerNameInput" placeholder="玩家昵称" style="width:80%;padding:6px;" />
     <br><br>
     <button onclick="submitPlayerName()" style="padding:6px 20px;background:#f59563;color:white;border:none;border-radius:6px;">提交</button>
   </div>
-  
   <script>
     // 防止页面上滑和右滑返回
     var touchStartX = 0;
@@ -192,27 +193,87 @@
         }
     }, { passive: false });
 
-    // 页面加载后初始化游戏
+    // 存储CSRF令牌和会话状态
+    let csrfToken = null;
+    let sessionInitialized = false;
+    
+    /* 游戏变量（全局作用域）
+var board = [];
+var score = 0;
+var gameOverTriggered = false; // 只声明一次
+var isGameOverFlag = false;*/
+    
+    // 页面加载后初始化游戏和获取CSRF令牌
     window.addEventListener('load', function() {
       canScroll = false;
       newgame();
+      initializeSession();
     });
     
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
-        document.getElementById("grid-container").innerHTML += '<div class="grid-cell" id="grid-cell-' + i + '-' + j + '"></div>';
-      }
+    // 初始化会话和获取CSRF令牌
+    function initializeSession() {
+      return new Promise((resolve, reject) => {
+        // 先发送一个初始化请求，确保会话已启动
+        $.get("./init_session.php")
+          .done(function() {
+            sessionInitialized = true;
+            // 再获取CSRF令牌
+            fetchCSRFToken().then(resolve).catch(reject);
+          })
+          .fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("会话初始化失败:", textStatus, errorThrown);
+            sessionInitialized = false;
+            reject(new Error("会话初始化失败"));
+          });
+      });
+    }
+    
+    // 获取CSRF令牌
+    function fetchCSRFToken() {
+      return new Promise((resolve, reject) => {
+        if (!sessionInitialized) {
+          reject(new Error("会话未初始化"));
+          return;
+        }
+        
+        $.get("./get_token.php")
+          .done(function(data) {
+            if (data.token) {
+              csrfToken = data.token;
+              console.log("CSRF令牌获取成功");
+              resolve(data.token);
+            } else {
+              console.error("CSRF令牌获取失败:", data);
+              reject(new Error("CSRF令牌格式不正确"));
+            }
+          })
+          .fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("获取CSRF令牌请求失败:", textStatus, errorThrown);
+            reject(new Error("获取CSRF令牌失败"));
+          });
+      });
+    }
+    
+    // 确保CSRF令牌有效的函数
+    function ensureValidCSRFToken() {
+      return new Promise((resolve, reject) => {
+        if (csrfToken) {
+          resolve(csrfToken);
+        } else {
+          initializeSession().then(token => resolve(token)).catch(reject);
+        }
+      });
     }
 
     function gameOver() {
-      if (gameOverTriggered) return;
-      gameOverTriggered = true;
-      isGameOverFlag = true;
-      canScroll = true; // 游戏结束后允许滚动
-      setTimeout(() => {
-        document.getElementById('name-popup').style.display = 'block';
-      }, 300);
-    }
+  if (gameOverTriggered) return; // 直接使用全局变量
+  gameOverTriggered = true;      // 直接赋值，不声明
+  isGameOverFlag = true;
+  canScroll = true;
+  setTimeout(() => {
+    document.getElementById('name-popup').style.display = 'block';
+  }, 300);
+}
 
     function submitPlayerName() {
       const name = document.getElementById("playerNameInput").value || "玩家";
@@ -221,15 +282,33 @@
     }
 
     function saveToLeaderboard(name, score) {
-      $.post("./leaderboard.php?action=add", {
-        name: name,
-        score: score
-      }, function(res) {
-        console.log("排行榜提交成功：", res);
-      });
+      ensureValidCSRFToken()
+        .then(token => {
+          return $.post("./leaderboard.php?action=add", {
+            name: name,
+            score: score,
+            csrf_token: token
+          });
+        })
+        .done(function(res) {
+          console.log("排行榜提交成功：", res);
+        })
+        .fail(function(jqXHR, textStatus, errorThrown) {
+          console.error("提交失败:", textStatus, errorThrown);
+          
+          if (jqXHR.status === 403) {
+            console.error("CSRF验证失败，重新初始化会话和令牌");
+            csrfToken = null; // 重置令牌
+            initializeSession()
+              .then(() => alert("安全验证已重置，请重试"))
+              .catch(err => alert("安全验证失败: " + err.message));
+          } else {
+            alert("提交失败: " + textStatus);
+          }
+        });
     }
 
-    function renderLeaderboard() {
+     function renderLeaderboard() {
       $.get("./leaderboard.php?action=get", function(data) {
         try {
           const parsed = typeof data === "string" ? JSON.parse(data) : data;
@@ -249,18 +328,23 @@
           }
     
         } catch (e) {
+          console.error("排行榜数据解析失败：", e);
+          console.error("服务器返回的数据：", data);
           alert("排行榜加载失败：" + e);
         }
+      }).fail(function(jqXHR, textStatus, errorThrown) {
+        console.error("排行榜请求失败：", textStatus, errorThrown);
+        alert("排行榜请求失败：" + textStatus);
       });
     }
 
     function toggleLeaderboard() {
       const lb = document.getElementById('leaderboard');
-      if (lb.classList.contains('show')) {
-        lb.classList.remove('show');
+      if (lb.classList.contains('active')) {
+        lb.classList.remove('active');
       } else {
         renderLeaderboard();
-        lb.classList.add('show');
+        lb.classList.add('active');
       }
     }
   </script>
@@ -269,7 +353,5 @@
       <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank">赣ICP备2025063750号-1</a>
     </p>
   </footer>
-</body>
-</html>
 </body>
 </html>
