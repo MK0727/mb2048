@@ -63,7 +63,8 @@
       color: #776e65;
     }
     #leaderboard {
-      display: none;
+      opacity: 0;
+      pointer-events: none;
       position: fixed;
       top: 50%;
       left: 50%;
@@ -75,6 +76,7 @@
       font-size: 14px;
       box-shadow: 0 0 10px rgba(0,0,0,0.2);
       z-index: 999;
+      transition: opacity 0.3s ease;
     }
     #leaderboard h3 {
       margin-top: 0;
@@ -113,7 +115,7 @@
       border-radius: 50px;
       border: none;
       cursor: pointer;
-      z-index: 900; /* 确保按钮在其他元素上方 */
+      z-index: 900;
     }
     #name-popup {
       display: none;
@@ -135,7 +137,7 @@
       text-align: center;
       color: #776e65;
       font-size: 12px;
-      z-index: 800; /* 确保footer在排行榜按钮下方 */
+      z-index: 800;
     }
   </style>
 </head>
@@ -161,9 +163,8 @@
   </div>
   
   <script>
-    // 防止页面上滑和右滑返回
     var touchStartX = 0;
-    var canScroll = false; // 控制是否允许滚动的标志
+    var canScroll = false;
     
     document.addEventListener('touchmove', function(e) {
         if (!canScroll) {
@@ -180,13 +181,12 @@
             var touchX = e.touches[0].clientX;
             var diffX = touchX - touchStartX;
             
-            if (diffX > 50) { // 向右滑动距离超过50px时阻止
+            if (diffX > 50) {
                 e.preventDefault();
             }
         }
     }, { passive: false });
 
-    // 页面加载后初始化游戏
     window.addEventListener('load', function() {
       canScroll = false;
       newgame();
@@ -202,7 +202,7 @@
       if (gameOverTriggered) return;
       gameOverTriggered = true;
       isGameOverFlag = true;
-      canScroll = true; // 游戏结束后允许滚动
+      canScroll = true;
       setTimeout(() => {
         document.getElementById('name-popup').style.display = 'block';
       }, 300);
@@ -215,11 +215,6 @@
     }
 
     function saveToLeaderboard(name, score) {
-      const MAX_SCORE = 19981222;
-      if (score > MAX_SCORE) {
-        alert("分数超过限制，无法提交到排行榜。");
-        return;
-      }
       $.post("./leaderboard.php?action=add", {
         name: name,
         score: score
@@ -228,7 +223,7 @@
       });
     }
 
-    function renderLeaderboard(callback) {
+    function renderLeaderboard() {
       $.get("./leaderboard.php?action=get", function(data) {
         try {
           const parsed = typeof data === "string" ? JSON.parse(data) : data;
@@ -246,9 +241,7 @@
               list.appendChild(li);
             });
           }
-          if (callback) {
-            callback();
-          }
+    
         } catch (e) {
           alert("排行榜加载失败：" + e);
         }
@@ -257,12 +250,13 @@
 
     function toggleLeaderboard() {
       const lb = document.getElementById('leaderboard');
-      if (lb.style.display === 'none') {
-        renderLeaderboard(() => {
-          lb.style.display = 'block';
-        });
+      if (lb.style.opacity === '0' || lb.style.opacity === '') {
+        renderLeaderboard();
+        lb.style.opacity = '1';
+        lb.style.pointerEvents = 'auto';
       } else {
-        lb.style.display = 'none';
+        lb.style.opacity = '0';
+        lb.style.pointerEvents = 'none';
       }
     }
   </script>
@@ -270,6 +264,9 @@
     <p>
       <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank">赣ICP备2025063750号-1</a>
     </p>
+  </footer>
+</body>
+</html>
   </footer>
 </body>
 </html>
