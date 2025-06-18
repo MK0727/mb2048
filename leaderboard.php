@@ -1,10 +1,9 @@
 <?php
-$host = "localhost";
-$dbname = "bread2048";
-$user = "bread2048";
-$pass = "mx123456";
+// 引入配置文件
+require_once 'config.php';
 
-$conn = new mysqli($host, $user, $pass, $dbname);
+// 使用配置文件中的信息建立数据库连接
+$conn = new mysqli($dbConfig['host'], $dbConfig['user'], $dbConfig['pass'], $dbConfig['dbname']);
 if ($conn->connect_error) {
     die("连接失败: " . $conn->connect_error);
 }
@@ -15,14 +14,18 @@ if ($action == 'get') {
     $sql = "SELECT name, score FROM leaderboard ORDER BY score DESC LIMIT 500";
     $result = $conn->query($sql);
     $data = array();
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $data[] = $row;
-        }
+    while($row = $result->fetch_assoc()) {
+        $data[] = $row;
     }
-    header('Content-Type: application/json');
     echo json_encode($data);
-} elseif ($action == 'add') {
+}
+else if ($action == 'add') {
+    // 验证 CSRF 令牌
+    if (!isset($_POST['csrf_token']) || !verifyCSRFToken($_POST['csrf_token'])) {
+        http_response_code(403);
+        die("CSRF 验证失败");
+    }
+
     $name = $conn->real_escape_string($_POST['name']);
     $score = intval($_POST['score']);
 
@@ -30,7 +33,7 @@ if ($action == 'get') {
     $check_sql = "SELECT score FROM leaderboard WHERE name = '$name'";
     $result = $conn->query($check_sql);
 
-    if ($result && $result->num_rows > 0) {
+    if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
         if ($score > $row['score']) {
             // 若新分数更高则更新
