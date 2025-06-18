@@ -215,6 +215,11 @@
     }
 
     function saveToLeaderboard(name, score) {
+      const MAX_SCORE = 19981222;
+      if (score > MAX_SCORE) {
+        alert("分数超过限制，无法提交到排行榜。");
+        return;
+      }
       $.post("./leaderboard.php?action=add", {
         name: name,
         score: score
@@ -223,7 +228,7 @@
       });
     }
 
-    function renderLeaderboard() {
+    function renderLeaderboard(callback) {
       $.get("./leaderboard.php?action=get", function(data) {
         try {
           const parsed = typeof data === "string" ? JSON.parse(data) : data;
@@ -241,7 +246,9 @@
               list.appendChild(li);
             });
           }
-    
+          if (callback) {
+            callback();
+          }
         } catch (e) {
           alert("排行榜加载失败：" + e);
         }
@@ -251,8 +258,9 @@
     function toggleLeaderboard() {
       const lb = document.getElementById('leaderboard');
       if (lb.style.display === 'none') {
-        renderLeaderboard();
-        lb.style.display = 'block';
+        renderLeaderboard(() => {
+          lb.style.display = 'block';
+        });
       } else {
         lb.style.display = 'none';
       }
